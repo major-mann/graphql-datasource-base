@@ -1,0 +1,29 @@
+enum Operation {
+    LT
+    LTE
+    E
+    GTE
+    GT
+    LESS_THAN
+    LESS_THAN_EQUAL
+    EQUAL
+    GREATER_THAN_EQUAL
+    GREATER_THAN
+    CONTAINS
+}
+
+input OrderInput {
+    field: String!
+    desc: Boolean!
+}
+
+input FilterInput {
+    field: String!
+    op: Operation!
+    value: String!
+}
+
+type PageInfo {
+    previousPage: ID
+    nextPage: ID
+}
