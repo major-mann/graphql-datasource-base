@@ -8,7 +8,7 @@ function buildDefinition({ definition, fields, dataFields, typeName, idName, gra
     const isInputTypeDefined = definition.definitions.some(
         def => def.name && def.name.kind === 'Name' && def.name.value === `${typeName}Input`
     );
-    const isUpsertInputTypeDefined = definition.definitions.some(
+    const isUpdateInputTypeDefined = definition.definitions.some(
         def => def.name && def.name.kind === 'Name' && def.name.value === `${typeName}UpsertInput`
     );
 
