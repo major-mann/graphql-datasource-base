@@ -77,7 +77,7 @@ function buildDefinition({ definition, fields, dataFields, typeName, idName, gra
                 type: field.type
             };
         } else if (!nonNull && field.type.kind === 'NonNullType') {
-            fieldType = fieldType.type;
+            fieldType = field.type.type;
         } else {
             fieldType = field.type;
         }
