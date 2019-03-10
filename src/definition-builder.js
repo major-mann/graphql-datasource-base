@@ -71,12 +71,12 @@ function buildDefinition({ definition, fields, dataFields, typeName, idName, gra
 
     function createInputField(field, nonNull) {
         let fieldType;
-        if (nonNull && fieldType.kind !== 'NonNullType') {
+        if (nonNull && field.type.kind !== 'NonNullType') {
             fieldType = {
                 kind: 'NonNullType',
                 type: field.type
             };
-        } else if (!nonNull && fieldType.kind === 'NonNullType') {
+        } else if (!nonNull && field.type.kind === 'NonNullType') {
             fieldType = fieldType.type;
         } else {
             fieldType = field.type;
