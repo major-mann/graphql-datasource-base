@@ -9,6 +9,10 @@
     ],
     "author": "Calvin Mann <calvinmann+npm@gmail.com>",
     "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "git@github.com:major-mann/graphql-datasource-base.git"
+    },
     "dependencies": {
         "graphql": "^14.1.1",
         "graphql-tools": "^4.0.4"
