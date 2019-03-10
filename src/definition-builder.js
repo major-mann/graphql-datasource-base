@@ -25,7 +25,7 @@ function buildDefinition({ definition, fields, dataFields, typeName, idName, gra
     return merged;
 
     function buildInputType(update) {
-        const typeFields = (upsert && dataFields || fields)
+        const typeFields = (update && dataFields || fields)
             .filter(field => field.kind === 'FieldDefinition')
             .map(field => createInputField(field, !update));
 
