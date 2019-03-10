@@ -84,9 +84,7 @@ function buildDefinition({ definition, fields, dataFields, typeName, idName, gra
         return `${field.name.value}: ${typeName(fieldType)}`;
 
         function typeName(type) {
-            if (type.kind === 'NonNullType' && noForced) {
-                return typeName(type.type);
-            } else if (type.kind === 'NonNullType') {
+            if (type.kind === 'NonNullType') {
                 return `${typeName(type.type)}!`;
             } else {
                 return type.name.value;
