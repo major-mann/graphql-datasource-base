@@ -15,20 +15,23 @@ function buildDefinition({ definition, fields, dataFields, typeName, idName, gra
     const inputType = !isInputTypeDefined ?
         buildInputType(false) :
         undefined;
-    const inputUpsertType = !isUpsertInputTypeDefined ?
+    const inputUpdateType = !isUpdateInputTypeDefined ?
         buildInputType(true) :
         undefined;
 
     const schema = buildBaseSchema();
 
-    const merged = mergeSchemas(definition, schema, inputType, inputUpsertType);
+    const merged = mergeSchemas(definition, schema, inputType, inputUpdateType);
     return merged;
 
-    function buildInputType(upsert) {
-        return parseQl(`
-            input ${typeName}${upsert && 'Upsert' || ''}Input {
-                ${(upsert && dataFields || fields).filter(field => field.kind === 'FieldDefinition')
-                    .map(field => createInputField(field, !upsert)).join('\n')}
+    function buildInputType(update) {
+        const typeFields = (upsert && dataFields || fields)
+            .filter(field => field.kind === 'FieldDefinition')
+            .map(field => createInputField(field, !update));
+
+        return parseql(`
+            input ${typeName}${update ? 'Update' : ''}Input {
+                ${typeFields.join('\n')}
             }
         `);
     }
@@ -36,7 +39,7 @@ function buildDefinition({ definition, fields, dataFields, typeName, idName, gra
     // TODO: Subscriptions
 
     function buildBaseSchema() {
-        return parseQl(`
+        return parseql(`
             type ${typeName}Edge {
                 node: ${typeName}!,
                 cursor: ID!
@@ -52,22 +55,33 @@ function buildDefinition({ definition, fields, dataFields, typeName, idName, gra
                 list(
                     cursor: ID,
                     limit: Int,
-                    order: [OrderInput],
-                    filter: [FilterInput]
+                    order: [OrderInput!],
+                    filter: [FilterInput!]
                 ): ${typeName}ListResponse
             }
 
             type ${typeName}Mutation {
-                create(${idName}: ID, data: ${typeName}Input): ID!
-                update(${idName}: ID, data: ${typeName}Input): Boolean
-                upsert(${idName}: ID, data: ${typeName}UpsertInput, = false): Boolean
+                create(${idName}: ID, data: ${typeName}Input!): ID!
+                update(${idName}: ID!, data: ${typeName}UpdateInput!): Boolean
+                upsert(${idName}: ID!, data: ${typeName}Input!): Boolean
                 delete(${idName}: ID!): Boolean
             }
         `);
     }
 
-    function createInputField(field, noForced) {
-        return `${field.name.value}: ${typeName(field.type)}`;
+    function createInputField(field, nonNull) {
+        let fieldType;
+        if (nonNull && fieldType.kind !== 'NonNullType') {
+            fieldType = {
+                kind: 'NonNullType',
+                type: field.type
+            };
+        } else if (!nonNull && fieldType.kind === 'NonNullType') {
+            fieldType = fieldType.type;
+        } else {
+            fieldType = field.type;
+        }
+        return `${field.name.value}: ${typeName(fieldType)}`;
 
         function typeName(type) {
             if (type.kind === 'NonNullType' && noForced) {
@@ -80,7 +94,7 @@ function buildDefinition({ definition, fields, dataFields, typeName, idName, gra
         }
     }
 
-    function parseQl(str) {
+    function parseql(str) {
         // str = `scaler Float\nscaler Int\nscaler ID\nscaler Boolean\n${str}`;
         const parsed = parse(str, graphqlOptions && graphqlOptions.parseOptions);
         // Do this for: https://github.com/apollographql/graphql-tools/issues/815

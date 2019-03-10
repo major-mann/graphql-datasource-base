@@ -141,15 +141,15 @@ This should generate something like the following
         list(
             cursor: ID,
             limit: Int,
-            order: [OrderInput],
-            filter: [FilterInput]
+            order: [OrderInput!],
+            filter: [FilterInput!]
         ): TestListResponse
     }
 
     type TestMutation {
-        create(testId: ID, data: TestInput): ID!
-        update(testId: ID, data: TestInput): Boolean
-        upsert(testId: ID, data: TestUpsertInput, = false): Boolean
+        create(testId: ID, data: TestInput!): ID!
+        update(testId: ID!, data: TestUpdateInput!): Boolean
+        upsert(testId: ID!, data: TestUpsertInput!): Boolean
         delete(testId: ID!): Boolean
     }
 
