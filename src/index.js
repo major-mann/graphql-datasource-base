@@ -1,35 +1,44 @@
 module.exports = createGraphqlInterface;
 
-const { graphql } = require('graphql');
-const { parse } = require('graphql/language/parser');
+const Case = require('case');
+const { parse, graphql } = require('graphql');
 const { makeExecutableSchema } = require('graphql-tools');
-const mergeSchemas = require('./merge.js');
+const mergeSchemaSyntaxTrees = require('./merge-ast.js');
 const loadSchema = require('./schema.js');
-const buildTypeDef = require('./definition-builder.js');
 const createResolvers = require('./resolvers.js');
+const { typeName, nameOf } = require('./util.js');
 
-// Utility exposures
+// Utility exposures (This helps with npm link development)
 createGraphqlInterface.graphql = graphql;
 
-async function createGraphqlInterface({ data, definitions, graphqlOptions, common }) {
+async function createGraphqlInterface({ data, definitions, rootTypes, graphqlOptions, idFieldSelector }) {
+    idFieldSelector = idFieldSelector || findFirstNonNullIdField;
+
     const typeList = [];
+    const common = await loadSchema('common');
 
-    if (typeof common === 'string') {
-        common = parseQl(common);
+    if (Array.isArray(definitions)) {
+        definitions = mergeSchemaSyntaxTrees({
+            schemas: definitions,
+            parseOptions: graphqlOptions.parseOptions
+        });
+    } else if (typeof definitions === 'string') {
+        definitions = parseQl(definitions);
     }
-    const defaultCommon = await loadSchema('common');
 
-    // Next add the user defined definitions
-    const schemas = definitions.map(processDefinition);
+    const rootTypeDefinitions = definitions.definitions
+        .filter(definition => rootTypes.includes(nameOf(definition)));
 
-    // Finally link it all up
-    const entryPoints = createEntryPoints();
+    const generatedStructures = flatten(rootTypeDefinitions.map(generateRootTypeStructures));
 
     // Combine everything
-    const typeDefs = mergeSchemas(defaultCommon, common, ...schemas, entryPoints);
+    const typeDefs = mergeSchemaSyntaxTrees({
+        schemas: [...generatedStructures, common, definitions],
+        parseOptions: graphqlOptions && graphqlOptions.parseOptions
+    });
 
     // Now we need resolvers
-    const resolvers = await createResolvers(data, typeList);
+    const resolvers = await createResolvers(data, typeDefs, typeList);
 
     // Create the executable schema
     const executableSchema = makeExecutableSchema({
@@ -39,84 +48,128 @@ async function createGraphqlInterface({ data, definitions, graphqlOptions, commo
     });
     return executableSchema;
 
-    function createEntryPoints() {
+    function generateRootTypeStructures(type) {
+        const namesAndFields = typeInfo(type);
+        typeList.push({
+            id: namesAndFields.idName,
+            type: namesAndFields.type,
+            name: namesAndFields.typeName,
+            fields: namesAndFields.fields,
+            idField: namesAndFields.idField,
+            identifier: namesAndFields.identifierName
+        });
+        const ancillary = generateAncillaryStructures({
+            type,
+            idName: namesAndFields.idName,
+            fields: namesAndFields.fields,
+            idField: namesAndFields.idField
+        });
+        const entryPoints = createEntryPoints(namesAndFields.identifierName, namesAndFields.typeName);
+
+        return [
+            ancillary,
+            entryPoints
+        ];
+    }
+
+    function createEntryPoints(name, type) {
+        // TODO: Subscription
         return parseQl(`
             type Query {
-                ${typeList.map(createQueryIdentifier).join('\n')}
+                ${name}: ${type}Query
             }
 
             type Mutation {
-                ${typeList.map(createMutationIdentifier).join('\n')}
+                ${name}: ${type}Mutation
+            }
+        `);
+    }
+
+    function generateAncillaryStructures({ type, idName, idField, fields }) {
+        const definitionType = nameOf(type);
+        const idFieldType = typeName(idField.type);
+        const plainIdFieldType = idFieldType.endsWith('!') ?
+            idFieldType.substring(0, idFieldType.length - 1) :
+            idFieldType;
+
+        return parseQl(`
+            input ${definitionType}Input {
+                ${fieldDefinitions(true)}
+            }
+
+            input ${definitionType}UpdateInput {
+                ${fieldDefinitions(false)}
+            }
+
+            type ${definitionType}Edge {
+                node: ${definitionType}!,
+                cursor: ID!
+            }
+
+            type ${definitionType}Connection {
+                edges: [${definitionType}Edge!]!,
+                pageInfo: DataSourcePageInfo
+            }
+
+            type ${definitionType}Query {
+                find(${idName}: ${idFieldType}): ${definitionType}
+                list(
+                    after: ID,
+                    limit: Int!,
+                    order: [DataSourceOrderInput!],
+                    filter: [DataSourceFilterInput!]
+                ): ${definitionType}Connection
+            }
+
+            type ${definitionType}Mutation {
+                create(${idName}: ${plainIdFieldType}, data: ${definitionType}Input!): ${plainIdFieldType}!
+                update(${idName}: ${idFieldType}, data: ${definitionType}UpdateInput!): Boolean
+                upsert(${idName}: ${idFieldType}, data: ${definitionType}Input!): Boolean
+                delete(${idName}: ${idFieldType}): Boolean
             }
         `);
 
-        function createQueryIdentifier(info) {
-            return `${info.name}: ${info.type}Query`;
-        }
-
-        function createMutationIdentifier(info) {
-            return `${info.name}: ${info.type}Mutation`;
+        function fieldDefinitions(nonNull) {
+            return fields.map(function createFieldSdl(field) {
+                const fieldName = nameOf(field);
+                const fieldType = `${nameOf(field.type)}${nonNull ? '!' : ''}`;
+                return `${fieldName}: ${fieldType}`;
+            }).join('\n');
         }
     }
 
-    function processDefinition(definition) {
-        const parsed = typeof definition === 'string' ?
-            parse(definition, graphqlOptions && graphqlOptions.parseOptions) :
-            definition;
-
-        if (!parsed || parsed.kind !== 'Document') {
-            throw new Error('Not a valid GraphQL document (expected "root.kind to equal "Document". ' +
-                `Got "${parsed && parsed.kind}").`);
-        }
-
-        const namesAndFields = namesFields(parsed);
-        typeList.push({
-            name: namesAndFields.identifierName,
-            type: namesAndFields.typeName,
-            id: namesAndFields.idName
-        });
-        return buildTypeDef({
-            definition: parsed,
-            ...namesAndFields
-        });
-
-    }
-
-    function namesFields(definition) {
+    function typeInfo(type) {
         // Get the primary definition and the name of the primary id field
-        const firstType = firstTypeDefinition(definition);
-        if (!firstType) {
-            throw new Error('Expected a type defined at the root of the document');
-        }
-        const firstIdField = findFirstNonNullIdField(firstType);
+        // TODO: Would be better to allow this to be controlled via a directive
+        const idField = idFieldSelector(type);
 
         // Get the names
-        const typeName = firstType.name.value;
-        const identifierName = typeName[0].toLowerCase() + typeName.substr(1);
-        const idName = firstIdField.name.value;
+        const typeName = nameOf(type);
+        const identifierName = Case.camel(typeName);
+        const idName = nameOf(idField);
 
         return {
+            type,
             idName,
             typeName,
             identifierName,
-            fields: firstType.fields,
-            dataFields: firstType.fields.filter(field => field !== firstIdField)
+            idField: idField,
+            fields: type.fields
+                .filter(field => field.kind === 'FieldDefinition')
+                .filter(field => field !== idField)
+                .map(field => ({
+                    kind: 'FieldDefinition',
+                    name: field.name,
+                    type: field.type.kind === 'NonNullType' ?
+                        field.type.type :
+                        field.type
+                }))
         };
     }
 
-    function firstTypeDefinition(document) {
-        switch (document && document.kind) {
-            case 'Document':
-                return document.definitions.find(firstTypeDefinition);
-            case 'ObjectTypeDefinition':
-                return document;
-            default:
-                return undefined;
-        }
-    }
-
-    function findFirstNonNullIdField(firstType) {
-        return firstType.fields.find(function isIdField(field) {
+    function findFirstNonNullIdField(type) {
+        debugger;
+        return type.fields.find(function isIdField(field) {
             return field &&
                 field.type &&
                 field.type.type &&
@@ -124,13 +177,29 @@ async function createGraphqlInterface({ data, definitions, graphqlOptions, commo
                 field.kind === 'FieldDefinition' &&
                 field.type.kind === 'NonNullType' &&
                 field.type.type.kind === 'NamedType' &&
-                field.type.type.name.kind === 'Name' &&
-                field.type.type.name.value === 'ID';
+                nameOf(field.type.type) === 'ID';
         });
     }
 
     function parseQl(str) {
-        const parsed = parse(str, graphqlOptions && graphqlOptions.parseOptions);
-        return parsed;
+        try {
+            const parsed = parse(str, graphqlOptions && graphqlOptions.parseOptions);
+            return parsed;
+        } catch (ex) {
+            console.debug(str);
+            throw ex;
+        }
+    }
+
+    function flatten(arr) {
+        const result = [];
+        for (const element of arr) {
+            if (Array.isArray(element)) {
+                result.push(...element);
+            } else {
+                result.push(element);
+            }
+        }
+        return result;
     }
 }

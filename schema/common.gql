@@ -1,29 +1,24 @@
-enum Operation {
+enum DataSourceFilterOperation {
     LT
     LTE
-    E
+    EQ
     GTE
     GT
-    LESS_THAN
-    LESS_THAN_EQUAL
-    EQUAL
-    GREATER_THAN_EQUAL
-    GREATER_THAN
     CONTAINS
 }
 
-input OrderInput {
+input DataSourceOrderInput {
     field: String!
     desc: Boolean!
 }
 
-input FilterInput {
+input DataSourceFilterInput {
     field: String!
-    op: Operation!
+    op: DataSourceFilterOperation!
     value: String!
 }
 
-type PageInfo {
-    previousPage: ID
-    nextPage: ID
+type DataSourcePageInfo {
+    hasNextPage: Boolean
+    hasPreviousPage: Boolean
 }

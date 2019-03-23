@@ -2,7 +2,7 @@ module.exports = createResolvers;
 
 const LIMIT = 100;
 
-async function createResolvers(data, types) {
+async function createResolvers(data, definition, types) {
     // TODO: Subscription
     const result = {
         Query: {},
@@ -11,26 +11,32 @@ async function createResolvers(data, types) {
     await Promise.all(types.map(processType));
     return result;
 
-    async function processType(type) {
+    async function processType(info) {
         await Promise.all([
-            createQueryResolver(type),
-            createMutationResolver(type)
+            createQueryResolver(info),
+            createMutationResolver(info)
         ]);
     }
 
     async function createQueryResolver(info) {
-        result.Query[info.name] = () => ({});
-        result[`${info.type}Query`] = await buildQueryResolver(info);
+        result.Query[info.identifier] = () => ({});
+        result[`${info.name}Query`] = await buildQueryResolver(info);
     }
 
     async function createMutationResolver(info) {
         // Return a blank object which will have the fields resolved by the type resolvers
-        result.Mutation[info.name] = () => ({});
-        result[`${info.type}Mutation`] = await buildMutationResolver(info);
+        result.Mutation[info.identifier] = () => ({});
+        result[`${info.name}Mutation`] = await buildMutationResolver(info);
     }
 
-    async function buildMutationResolver({ name, id }) {
-        const collection = await data(name, id);
+    async function buildMutationResolver({ name, id, type }) {
+        debugger;
+        const collection = await data({
+            id,
+            name,
+            type,
+            definition,
+        });
         return {
             create,
             update,
@@ -62,8 +68,13 @@ async function createResolvers(data, types) {
 
     }
 
-    async function buildQueryResolver({ name, id }) {
-        const collection = await data(name, id);
+    async function buildQueryResolver({ name, id, type }) {
+        const collection = await data({
+            id,
+            name,
+            type,
+            definition,
+        });
         return {
             find,
             list
