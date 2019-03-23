@@ -86,15 +86,20 @@ async function createResolvers(data, definition, types) {
         }
 
         async function list(root, args, context, info) {
-            const limit = args.limit > 0 ?
-                Math.min(args.limit, LIMIT) :
+            const first = args.first > 0 ?
+                Math.min(args.first, LIMIT) :
                 LIMIT;
+            const last = args.last > 0 ?
+                Math.min(args.last, LIMIT) :
+                LIMIT
             // TODO: Need to pass in selected fields so the query can be done intelligently
             const data = await collection.list({
                 filter: args.filter,
+                before: args.before,
+                after: args.after,
                 order: args.order,
-                cursor: args.cursor,
-                limit
+                first,
+                last
             });
             return data;
         }

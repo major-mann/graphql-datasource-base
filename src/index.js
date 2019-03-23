@@ -114,9 +114,11 @@ async function createGraphqlInterface({ data, definitions, rootTypes, graphqlOpt
             type ${definitionType}Query {
                 find(${idName}: ${idFieldType}): ${definitionType}
                 list(
-                    after: ID,
-                    limit: Int!,
-                    order: [DataSourceOrderInput!],
+                    before: ID
+                    after: ID
+                    first: Int
+                    last: Int
+                    order: [DataSourceOrderInput!]
                     filter: [DataSourceFilterInput!]
                 ): ${definitionType}Connection
             }
@@ -140,7 +142,6 @@ async function createGraphqlInterface({ data, definitions, rootTypes, graphqlOpt
 
     function typeInfo(type) {
         // Get the primary definition and the name of the primary id field
-        // TODO: Would be better to allow this to be controlled via a directive
         const idField = idFieldSelector(type);
 
         // Get the names
