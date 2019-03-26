@@ -2,13 +2,12 @@ module.exports = merge;
 
 const MERGEABLE = ['Query', 'Mutation', 'Subscription'];
 
-const parse = require('graphql');
+const { parse } = require('graphql');
 
 function merge({ schemas, parseOptions }) {
     schemas = schemas.map(prepareSchema);
     return {
         kind: 'Document',
-        // TODO: This is comming out unflattened............
         definitions: mergeAll(schemas)
     };
 
@@ -62,7 +61,7 @@ function merge({ schemas, parseOptions }) {
 
     function prepareSchema(schema) {
         if (typeof schema === 'string') {
-            schema = parse(str, parseOptions);
+            schema = parse(schema, parseOptions);
         }
         if (schema.kind !== 'Document') {
             throw new Error('Supplied schemas MUST be or MUST parse to Document');

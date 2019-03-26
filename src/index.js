@@ -20,7 +20,7 @@ async function createGraphqlInterface({ data, definitions, rootTypes, graphqlOpt
     if (Array.isArray(definitions)) {
         definitions = mergeSchemaSyntaxTrees({
             schemas: definitions,
-            parseOptions: graphqlOptions.parseOptions
+            parseOptions: graphqlOptions && graphqlOptions.parseOptions
         });
     } else if (typeof definitions === 'string') {
         definitions = parseQl(definitions);
@@ -169,7 +169,6 @@ async function createGraphqlInterface({ data, definitions, rootTypes, graphqlOpt
     }
 
     function findFirstNonNullIdField(type) {
-        debugger;
         return type.fields.find(function isIdField(field) {
             return field &&
                 field.type &&

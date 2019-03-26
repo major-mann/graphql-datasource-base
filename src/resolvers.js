@@ -30,7 +30,6 @@ async function createResolvers(data, definition, types) {
     }
 
     async function buildMutationResolver({ name, id, type }) {
-        debugger;
         const collection = await data({
             id,
             name,
@@ -85,13 +84,13 @@ async function createResolvers(data, definition, types) {
             return data;
         }
 
-        async function list(root, args, context, info) {
+        async function list(root, args) {
             const first = args.first > 0 ?
                 Math.min(args.first, LIMIT) :
-                LIMIT;
+                undefined;
             const last = args.last > 0 ?
                 Math.min(args.last, LIMIT) :
-                LIMIT
+                undefined;
             // TODO: Need to pass in selected fields so the query can be done intelligently
             const data = await collection.list({
                 filter: args.filter,

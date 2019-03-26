@@ -1,6 +1,6 @@
 {
     "name": "@major-mann/graphql-datasource-base",
-    "version": "0.0.9",
+    "version": "0.0.10",
     "description": "A base library for quickly and easily creating a graphql interface onto a data source",
     "main": "src/index.js",
     "keywords": [
