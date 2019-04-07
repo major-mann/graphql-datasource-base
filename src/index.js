@@ -19,7 +19,7 @@ async function createGraphqlInterface({ data, definitions, rootTypes, graphqlOpt
 
     if (Array.isArray(definitions)) {
         definitions = mergeSchemaSyntaxTrees({
-            schemas: definitions,
+            typeDefs: definitions,
             parseOptions: graphqlOptions && graphqlOptions.parseOptions
         });
     } else if (typeof definitions === 'string') {
@@ -33,7 +33,7 @@ async function createGraphqlInterface({ data, definitions, rootTypes, graphqlOpt
 
     // Combine everything
     const typeDefs = mergeSchemaSyntaxTrees({
-        schemas: [...generatedStructures, common, definitions],
+        typeDefs: [...generatedStructures, common, definitions],
         parseOptions: graphqlOptions && graphqlOptions.parseOptions
     });
 
