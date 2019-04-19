@@ -38,7 +38,7 @@ async function createGraphqlInterface({ data, definitions, rootTypes, idFieldSel
     if (Array.isArray(definitions)) {
         definitions.forEach(definition => composer.addTypeDefs(definition));
     } else if (typeof definitions === 'string') {
-        composer.addTypeDefs(definition)
+        composer.addTypeDefs(definitions);
     }
 
     // Process the root types
