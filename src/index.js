@@ -1,205 +1,273 @@
 module.exports = createGraphqlInterface;
 
 const Case = require('case');
-const { parse, graphql } = require('graphql');
-const { makeExecutableSchema } = require('graphql-tools');
-const mergeSchemaSyntaxTrees = require('./merge-ast.js');
-const loadSchema = require('./schema.js');
-const createResolvers = require('./resolvers.js');
-const { typeName, nameOf } = require('./util.js');
-
-// Utility exposures (This helps with npm link development)
-createGraphqlInterface.graphql = graphql;
+const { SchemaComposer } = require('graphql-compose');
 
 async function createGraphqlInterface({ data, definitions, rootTypes, graphqlOptions, idFieldSelector }) {
     idFieldSelector = idFieldSelector || findFirstNonNullIdField;
 
-    const typeList = [];
-    const common = await loadSchema('common');
+    const composer = new SchemaComposer();
+
+    composer.addTypeDefs(`
+        enum DataSourceFilterOperation {
+            LT
+            LTE
+            EQ
+            GTE
+            GT
+            CONTAINS
+        }
+
+        input DataSourceOrderInput {
+            field: String!
+            desc: Boolean!
+        }
+
+        input DataSourceFilterInput {
+            field: String!
+            op: DataSourceFilterOperation!
+            value: String!
+        }
+
+        type DataSourcePageInfo {
+            hasNextPage: Boolean
+            hasPreviousPage: Boolean
+        }
+    `);
 
     if (Array.isArray(definitions)) {
-        definitions = mergeSchemaSyntaxTrees({
-            typeDefs: definitions,
-            parseOptions: graphqlOptions && graphqlOptions.parseOptions
-        });
+        definitions.forEach(definition => composer.addTypeDefs(definition));
     } else if (typeof definitions === 'string') {
-        definitions = parseQl(definitions);
+        composer.addTypeDefs(definition)
     }
 
-    const rootTypeDefinitions = definitions.definitions
-        .filter(definition => rootTypes.includes(nameOf(definition)));
+    // Process the root types
+    Array.from(composer.entries())
+        .filter(entry => rootTypes.includes(entry[0]))
+        .map(entry => processRootType(entry[1]));
 
-    const generatedStructures = flatten(rootTypeDefinitions.map(generateRootTypeStructures));
+    const composerSchema = composer.buildSchema();
+    return composerSchema;
 
-    // Combine everything
-    const typeDefs = mergeSchemaSyntaxTrees({
-        typeDefs: [...generatedStructures, common, definitions],
-        parseOptions: graphqlOptions && graphqlOptions.parseOptions
-    });
+    function processRootType(typeComposer) {
+        const typeName = typeComposer.getTypeName();
+        const idFieldName = idFieldSelector(typeComposer);
+        const idFieldType = typeComposer.getField(idFieldName).type;
+        const plainIdFieldType = plainType(idFieldType);
 
-    // Now we need resolvers
-    const resolvers = await createResolvers(data, typeDefs, typeList);
+        // TODO: get fields (nullable), excluding id field
+        const fieldDefinitions = typeComposer.getFieldNames()
+            .filter(fieldName => fieldName !== idFieldName)
+            .map(fieldName => ({ name: fieldName, type: typeComposer.getFieldTC(fieldName) }));
 
-    // Create the executable schema
-    const executableSchema = makeExecutableSchema({
-        ...graphqlOptions,
-        typeDefs,
-        resolvers
-    });
-    return executableSchema;
+        createInputType();
+        createUpdateInputType();
+        createListTypes();
+        createQueryType();
+        createMutationType();
 
-    function generateRootTypeStructures(type) {
-        const namesAndFields = typeInfo(type);
-        typeList.push({
-            id: namesAndFields.idName,
-            type: namesAndFields.type,
-            name: namesAndFields.typeName,
-            fields: namesAndFields.fields,
-            idField: namesAndFields.idField,
-            identifier: namesAndFields.identifierName
-        });
-        const ancillary = generateAncillaryStructures({
-            type,
-            idName: namesAndFields.idName,
-            fields: namesAndFields.fields,
-            idField: namesAndFields.idField
-        });
-        const entryPoints = createEntryPoints(namesAndFields.identifierName, namesAndFields.typeName);
+        function createInputType() {
+            const inputTypeName = `${typeName}Input`;
+            if (composer.has(inputTypeName)) {
+                // The consumer has defined a custom structure
+                return;
+            }
+            composer.createInputTC({
+                name: inputTypeName,
+                fields: fieldDefinitions.reduce(function fieldReduce(result, fieldDefinition) {
+                    result[fieldDefinition.name] = fieldDefinition.type.getType();
+                    return result;
+                }, {})
+            });
+        }
 
-        return [
-            ancillary,
-            entryPoints
-        ];
-    }
+        function createUpdateInputType() {
+            const inputTypeName = `${typeName}UpdateInput`;
+            if (composer.has(inputTypeName)) {
+                // The consumer has defined a custom structure
+                return;
+            }
+            composer.createInputTC({
+                name: inputTypeName,
+                fields: fieldDefinitions.reduce(function fieldReduce(result, fieldDefinition) {
+                    result[fieldDefinition.name] = fieldDefinition.type.getTypeNonNull();
+                    return result;
+                }, {})
+            });
+        }
 
-    function createEntryPoints(name, type) {
-        // TODO: Subscription
-        return parseQl(`
-            type Query {
-                ${name}: ${type}Query
+        function createListTypes() {
+            composer.createObjectTC({
+                name: `${typeName}Edge`,
+                fields: {
+                    node: `${typeName}!`,
+                    cursor: 'ID!'
+                }
+            });
+            composer.createObjectTC({
+                name: `${typeName}Connection`,
+                fields: {
+                    edges: `[${typeName}Edge!]!`,
+                    pageInfo: 'DataSourcePageInfo!'
+                }
+            });
+        }
+
+        function createQueryType() {
+            composer.createObjectTC({
+                name: `${typeName}Query`,
+                fields: {
+                    find: {
+                        resolve: find,
+                        type: `${typeName}!`,
+                        args: {
+                            [idFieldName]: idFieldType
+                        }
+
+                    },
+                    list: {
+                        resolve: list,
+                        type: `${typeName}Connection`,
+                        args: {
+                            before: 'ID',
+                            after: 'ID',
+                            first: 'Int',
+                            last: 'Int',
+                            order: '[DataSourceOrderInput!]',
+                            filter: '[DataSourceFilterInput!]'
+                        }
+                    }
+                }
+            });
+
+            composer.Query.addFields({
+                [Case.camel(typeName)]: {
+                    type: `${typeName}Query`,
+                    resolve: () => ({})
+                }
+            });
+
+            async function find(root, args) {
+                const collection = await loadCollection();
+                const record = await collection.find(args[idFieldName]);
+                return record;
             }
 
-            type Mutation {
-                ${name}: ${type}Mutation
+            async function list(root, args) {
+                const collection = await loadCollection();
+                const first = args.first > 0 ?
+                    Math.min(args.first, LIMIT) :
+                    undefined;
+                const last = args.last > 0 ?
+                    Math.min(args.last, LIMIT) :
+                    undefined;
+                // TODO: Need to pass in selected fields so the query can be done intelligently
+                const data = await collection.list({
+                    filter: args.filter,
+                    before: args.before,
+                    after: args.after,
+                    order: args.order,
+                    first,
+                    last
+                });
+                return data;
             }
-        `);
-    }
+        }
 
-    function generateAncillaryStructures({ type, idName, idField, fields }) {
-        const definitionType = nameOf(type);
-        const idFieldType = typeName(idField.type);
-        const plainIdFieldType = idFieldType.endsWith('!') ?
-            idFieldType.substring(0, idFieldType.length - 1) :
-            idFieldType;
+        function createMutationType() {
+            // TODO: Need nullable id type...
+            composer.createObjectTC({
+                name: `${typeName}Mutation`,
+                fields: {
+                    create: {
+                        type: idFieldType,
+                        resolve: create,
+                        args: {
+                            [idFieldName]: plainIdFieldType,
+                            data: `${typeName}Input!`
+                        }
+                    },
+                    update: {
+                        type: 'Boolean',
+                        resolve: update,
+                        args: {
+                            [idFieldName]: idFieldType,
+                            data: `${typeName}UpdateInput!`
+                        }
+                    },
+                    upsert: {
+                        type: 'Boolean',
+                        resolve: upsert,
+                        args: {
+                            [idFieldName]: idFieldType,
+                            data: `${typeName}Input!`
+                        }
+                    },
+                    delete: {
+                        type: 'Boolean',
+                        resolve: remove,
+                        args: {
+                            [idFieldName]: idFieldType
+                        }
+                    }
+                }
+            });
 
-        return parseQl(`
-            input ${definitionType}Input {
-                ${fieldDefinitions(true)}
+            composer.Mutation.addFields({
+                [Case.camel(typeName)]: {
+                    type: `${typeName}Mutation`,
+                    resolve: () => ({})
+                }
+            });
+
+            async function create(root, args) {
+                const collection = await loadCollection();
+                const documentId = await collection.create(args[idFieldName], { ...args.data });
+                return documentId;
             }
 
-            input ${definitionType}UpdateInput {
-                ${fieldDefinitions(false)}
+            async function upsert(root, args) {
+                const collection = await loadCollection();
+                await collection.upsert(args[idFieldName], { ...args.data });
             }
 
-            type ${definitionType}Edge {
-                node: ${definitionType}!,
-                cursor: ID!
+            async function update(root, args) {
+                const collection = await loadCollection();
+                const existing = await collection.find(args[idFieldName]);
+                if (existing) {
+                    await collection.update(args[idFieldName], { ...args.data });
+                } else {
+                    throw new Error(`Document with id "${args[idFieldName]}" in collection ` +
+                        `"${name}" does not exist for update`);
+                }
             }
 
-            type ${definitionType}Connection {
-                edges: [${definitionType}Edge!]!,
-                pageInfo: DataSourcePageInfo
+            async function remove(root, args) {
+                const collection = await loadCollection();
+                await collection.delete(args[idFieldName]);
             }
+        }
 
-            type ${definitionType}Query {
-                find(${idName}: ${idFieldType}): ${definitionType}
-                list(
-                    before: ID
-                    after: ID
-                    first: Int
-                    last: Int
-                    order: [DataSourceOrderInput!]
-                    filter: [DataSourceFilterInput!]
-                ): ${definitionType}Connection
-            }
-
-            type ${definitionType}Mutation {
-                create(${idName}: ${plainIdFieldType}, data: ${definitionType}Input!): ${plainIdFieldType}!
-                update(${idName}: ${idFieldType}, data: ${definitionType}UpdateInput!): Boolean
-                upsert(${idName}: ${idFieldType}, data: ${definitionType}Input!): Boolean
-                delete(${idName}: ${idFieldType}): Boolean
-            }
-        `);
-
-        function fieldDefinitions(nonNull) {
-            return fields.map(function createFieldSdl(field) {
-                const fieldName = nameOf(field);
-                const fieldType = `${nameOf(field.type)}${nonNull ? '!' : ''}`;
-                return `${fieldName}: ${fieldType}`;
-            }).join('\n');
+        async function loadCollection() {
+            const collection = await data({
+                id: idFieldName,
+                type: composerSchema.getType(typeName),
+                schema: composerSchema
+            });
+            return collection;
         }
     }
 
-    function typeInfo(type) {
-        // Get the primary definition and the name of the primary id field
-        const idField = idFieldSelector(type);
-
-        // Get the names
-        const typeName = nameOf(type);
-        const identifierName = Case.camel(typeName);
-        const idName = nameOf(idField);
-
-        return {
-            type,
-            idName,
-            typeName,
-            identifierName,
-            idField: idField,
-            fields: type.fields
-                .filter(field => field.kind === 'FieldDefinition')
-                .filter(field => field !== idField)
-                .map(field => ({
-                    kind: 'FieldDefinition',
-                    name: field.name,
-                    type: field.type.kind === 'NonNullType' ?
-                        field.type.type :
-                        field.type
-                }))
-        };
+    function findFirstNonNullIdField(typeComposer) {
+        return typeComposer.getFieldNames()
+            .find(fieldName => typeComposer.getField(fieldName).type === 'ID!');
     }
 
-    function findFirstNonNullIdField(type) {
-        return type.fields.find(function isIdField(field) {
-            return field &&
-                field.type &&
-                field.type.type &&
-                field.type.type.name &&
-                field.kind === 'FieldDefinition' &&
-                field.type.kind === 'NonNullType' &&
-                field.type.type.kind === 'NamedType' &&
-                nameOf(field.type.type) === 'ID';
-        });
-    }
-
-    function parseQl(str) {
-        try {
-            const parsed = parse(str, graphqlOptions && graphqlOptions.parseOptions);
-            return parsed;
-        } catch (ex) {
-            console.debug(str);
-            throw ex;
+    function plainType(type) {
+        if (type.endsWith('!')) {
+            return type.substr(0, type.length - 1);
+        } else {
+            return type;
         }
-    }
-
-    function flatten(arr) {
-        const result = [];
-        for (const element of arr) {
-            if (Array.isArray(element)) {
-                result.push(...element);
-            } else {
-                result.push(element);
-            }
-        }
-        return result;
     }
 }
