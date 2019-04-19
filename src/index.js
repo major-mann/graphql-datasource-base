@@ -3,7 +3,7 @@ module.exports = createGraphqlInterface;
 const Case = require('case');
 const { SchemaComposer } = require('graphql-compose');
 
-async function createGraphqlInterface({ data, definitions, rootTypes, graphqlOptions, idFieldSelector }) {
+async function createGraphqlInterface({ data, definitions, rootTypes, idFieldSelector }) {
     idFieldSelector = idFieldSelector || findFirstNonNullIdField;
 
     const composer = new SchemaComposer();
