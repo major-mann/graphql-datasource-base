@@ -119,7 +119,7 @@ async function createGraphqlInterface({ data, definitions, rootTypes, idFieldSel
                 fields: {
                     find: {
                         resolve: find,
-                        type: `${typeName}!`,
+                        type: typeName,
                         args: {
                             [idFieldName]: idFieldType
                         }
