@@ -46,8 +46,7 @@ async function createGraphqlInterface({ data, definitions, rootTypes, idFieldSel
         .filter(entry => rootTypes.includes(entry[0]))
         .map(entry => processRootType(entry[1]));
 
-    const composerSchema = composer.buildSchema();
-    return composerSchema;
+    return composer;
 
     function processRootType(typeComposer) {
         const typeName = typeComposer.getTypeName();
@@ -55,7 +54,6 @@ async function createGraphqlInterface({ data, definitions, rootTypes, idFieldSel
         const idFieldType = typeComposer.getField(idFieldName).type;
         const plainIdFieldType = plainType(idFieldType);
 
-        // TODO: get fields (nullable), excluding id field
         const fieldDefinitions = typeComposer.getFieldNames()
             .filter(fieldName => fieldName !== idFieldName)
             .map(fieldName => ({ name: fieldName, type: typeComposer.getFieldTC(fieldName) }));
@@ -114,30 +112,30 @@ async function createGraphqlInterface({ data, definitions, rootTypes, idFieldSel
         }
 
         function createQueryType() {
-            composer.createObjectTC({
-                name: `${typeName}Query`,
-                fields: {
-                    find: {
-                        resolve: find,
-                        type: typeName,
-                        args: {
-                            [idFieldName]: idFieldType
-                        }
-
-                    },
-                    list: {
-                        resolve: list,
-                        type: `${typeName}Connection`,
-                        args: {
-                            before: 'ID',
-                            after: 'ID',
-                            first: 'Int',
-                            last: 'Int',
-                            order: '[DataSourceOrderInput!]',
-                            filter: '[DataSourceFilterInput!]'
-                        }
+            const queryObject =  composer.createObjectTC({ name: `${typeName}Query` })
+                .addResolver({
+                    resolve: find,
+                    type: typeName,
+                    args: {
+                        [idFieldName]: idFieldType
                     }
-                }
+                })
+                .addResolver({
+                    resolve: list,
+                    type: `${typeName}Connection`,
+                    args: {
+                        before: 'ID',
+                        after: 'ID',
+                        first: 'Int',
+                        last: 'Int',
+                        order: '[DataSourceOrderInput!]',
+                        filter: '[DataSourceFilterInput!]'
+                    }
+                });
+
+            queryObject.addFields({
+                find: queryObject.getResolver('$find'),
+                list: queryObject.getResolver('$list')
             });
 
             composer.Query.addFields({
@@ -175,42 +173,47 @@ async function createGraphqlInterface({ data, definitions, rootTypes, idFieldSel
         }
 
         function createMutationType() {
-            // TODO: Need nullable id type...
-            composer.createObjectTC({
-                name: `${typeName}Mutation`,
-                fields: {
-                    create: {
-                        type: idFieldType,
-                        resolve: create,
-                        args: {
-                            [idFieldName]: plainIdFieldType,
-                            data: `${typeName}Input!`
-                        }
-                    },
-                    update: {
-                        type: 'Boolean',
-                        resolve: update,
-                        args: {
-                            [idFieldName]: idFieldType,
-                            data: `${typeName}UpdateInput!`
-                        }
-                    },
-                    upsert: {
-                        type: 'Boolean',
-                        resolve: upsert,
-                        args: {
-                            [idFieldName]: idFieldType,
-                            data: `${typeName}Input!`
-                        }
-                    },
-                    delete: {
-                        type: 'Boolean',
-                        resolve: remove,
-                        args: {
-                            [idFieldName]: idFieldType
-                        }
+            const mutationObject = composer.createObjectTC({ name: `${typeName}Mutation` })
+                .addResolver({
+                    name: '$create',
+                    type: idFieldType,
+                    resolve: create,
+                    args: {
+                        [idFieldName]: plainIdFieldType,
+                        data: `${typeName}Input!`
                     }
-                }
+                })
+                .addResolver({
+                    name: '$update',
+                    type: 'Boolean',
+                    resolve: update,
+                    args: {
+                        [idFieldName]: idFieldType,
+                        data: `${typeName}UpdateInput!`
+                    }
+                })
+                .addResolver({
+                    name: '$upsert',
+                    type: 'Boolean',
+                    resolve: upsert,
+                    args: {
+                        [idFieldName]: idFieldType,
+                        data: `${typeName}Input!`
+                    }
+                })
+                .addResolver({
+                    name: '$delete',
+                    type: 'Boolean',
+                    resolve: remove,
+                    args: {
+                        [idFieldName]: idFieldType
+                    }
+                });
+            mutationObject.addFields({
+                create: mutationObject.getResolver('$create'),
+                update: mutationObject.getResolver('$update'),
+                upsert: mutationObject.getResolver('$upsert'),
+                delete: mutationObject.getResolver('$delete')
             });
 
             composer.Mutation.addFields({
