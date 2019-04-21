@@ -114,6 +114,7 @@ async function createGraphqlInterface({ data, definitions, rootTypes, idFieldSel
         function createQueryType() {
             const queryObject =  composer.createObjectTC({ name: `${typeName}Query` })
                 .addResolver({
+                    name: '$find',
                     resolve: find,
                     type: typeName,
                     args: {
@@ -121,6 +122,7 @@ async function createGraphqlInterface({ data, definitions, rootTypes, idFieldSel
                     }
                 })
                 .addResolver({
+                    name: '$list',
                     resolve: list,
                     type: `${typeName}Connection`,
                     args: {
@@ -145,13 +147,13 @@ async function createGraphqlInterface({ data, definitions, rootTypes, idFieldSel
                 }
             });
 
-            async function find(root, args) {
+            async function find({ args }) {
                 const collection = await loadCollection();
                 const record = await collection.find(args[idFieldName]);
                 return record;
             }
 
-            async function list(root, args) {
+            async function list({ args }) {
                 const collection = await loadCollection();
                 const first = args.first > 0 ?
                     Math.min(args.first, LIMIT) :
@@ -223,18 +225,18 @@ async function createGraphqlInterface({ data, definitions, rootTypes, idFieldSel
                 }
             });
 
-            async function create(root, args) {
+            async function create({ args }) {
                 const collection = await loadCollection();
                 const documentId = await collection.create(args[idFieldName], { ...args.data });
                 return documentId;
             }
 
-            async function upsert(root, args) {
+            async function upsert({ args }) {
                 const collection = await loadCollection();
                 await collection.upsert(args[idFieldName], { ...args.data });
             }
 
-            async function update(root, args) {
+            async function update({ args }) {
                 const collection = await loadCollection();
                 const existing = await collection.find(args[idFieldName]);
                 if (existing) {
@@ -245,7 +247,7 @@ async function createGraphqlInterface({ data, definitions, rootTypes, idFieldSel
                 }
             }
 
-            async function remove(root, args) {
+            async function remove({ args }) {
                 const collection = await loadCollection();
                 await collection.delete(args[idFieldName]);
             }
@@ -254,8 +256,9 @@ async function createGraphqlInterface({ data, definitions, rootTypes, idFieldSel
         async function loadCollection() {
             const collection = await data({
                 id: idFieldName,
-                type: composerSchema.getType(typeName),
-                schema: composerSchema
+                name: typeName,
+                type: composer.getOTC(typeName),
+                schema: composer
             });
             return collection;
         }
