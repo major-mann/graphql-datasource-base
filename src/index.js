@@ -20,7 +20,7 @@ async function createGraphqlInterface({ data, definitions, rootTypes, idFieldSel
 
         input DataSourceOrderInput {
             field: String!
-            desc: Boolean!
+            desc: Boolean
         }
 
         input DataSourceFilterInput {
