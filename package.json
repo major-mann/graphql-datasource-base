@@ -1,6 +1,6 @@
 {
     "name": "@major-mann/graphql-datasource-base",
-    "version": "0.0.18",
+    "version": "0.0.19",
     "description": "A base library for quickly and easily creating a graphql interface onto a data source",
     "main": "src/index.js",
     "keywords": [
@@ -16,6 +16,7 @@
     "dependencies": {
         "case": "^1.6.1",
         "graphql": "^14.2.1",
-        "graphql-compose": "^6.3.2"
+        "graphql-compose": "^6.3.2",
+        "uuid": "^3.3.2"
     }
 }

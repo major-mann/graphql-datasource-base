@@ -1,15 +1,17 @@
 module.exports = createGraphqlInterface;
 
+const uuid = require('uuid');
 const Case = require('case');
 const { SchemaComposer } = require('graphql-compose');
 
-async function createGraphqlInterface({ data, definitions, rootTypes, idFieldSelector }) {
+async function createGraphqlInterface({ data, definitions, rootTypes, idFieldSelector, namespace }) {
+    namespace = namespace || uuid.v4().substr(0, 6);
     idFieldSelector = idFieldSelector || findFirstNonNullIdField;
 
     const composer = new SchemaComposer();
 
     composer.addTypeDefs(`
-        enum DataSourceFilterOperation {
+        enum DataSourceFilterOperation${namespace} {
             LT
             LTE
             EQ
@@ -18,18 +20,18 @@ async function createGraphqlInterface({ data, definitions, rootTypes, idFieldSel
             CONTAINS
         }
 
-        input DataSourceOrderInput {
+        input DataSourceOrderInput${namespace} {
             field: String!
             desc: Boolean
         }
 
-        input DataSourceFilterInput {
+        input DataSourceFilterInput${namespace} {
             field: String!
             op: DataSourceFilterOperation!
             value: String!
         }
 
-        type DataSourcePageInfo {
+        type DataSourcePageInfo${namespace} {
             hasNextPage: Boolean
             hasPreviousPage: Boolean
         }
@@ -106,7 +108,7 @@ async function createGraphqlInterface({ data, definitions, rootTypes, idFieldSel
                 name: `${typeName}Connection`,
                 fields: {
                     edges: `[${typeName}Edge!]!`,
-                    pageInfo: 'DataSourcePageInfo!'
+                    pageInfo: `DataSourcePageInfo${namespace}!`
                 }
             });
         }
@@ -130,8 +132,8 @@ async function createGraphqlInterface({ data, definitions, rootTypes, idFieldSel
                         after: 'ID',
                         first: 'Int',
                         last: 'Int',
-                        order: '[DataSourceOrderInput!]',
-                        filter: '[DataSourceFilterInput!]'
+                        order: `[DataSourceOrderInput${namespace}!]`,
+                        filter: `[DataSourceFilterInput${namespace}!]`
                     }
                 });
 
