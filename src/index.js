@@ -1,11 +1,10 @@
 module.exports = createGraphqlInterface;
 
-const uuid = require('uuid');
 const Case = require('case');
 const { SchemaComposer } = require('graphql-compose');
 
 async function createGraphqlInterface({ data, definitions, rootTypes, idFieldSelector, namespace }) {
-    namespace = namespace || uuid.v4().substr(0, 6);
+    namespace = namespace || '';
     idFieldSelector = idFieldSelector || findFirstNonNullIdField;
 
     const composer = new SchemaComposer();
