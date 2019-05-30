@@ -268,7 +268,15 @@ async function createGraphqlInterface({ data, definitions, rootTypes, idFieldSel
 
     function findFirstNonNullIdField(typeComposer) {
         return typeComposer.getFieldNames()
-            .find(fieldName => typeComposer.getField(fieldName).type === 'ID!');
+            .find(fieldName => typeName(typeComposer.getField(fieldName).type) === 'ID!');
+    }
+
+    function typeName(type) {
+        if (typeof type === 'string') {
+            return type;
+        } else {
+            return type.getTypeName();
+        }
     }
 
     function plainType(type) {
