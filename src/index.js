@@ -271,19 +271,20 @@ async function createGraphqlInterface({ data, definitions, rootTypes, idFieldSel
             .find(fieldName => typeName(typeComposer.getField(fieldName).type) === 'ID!');
     }
 
+    function plainType(type) {
+        type = typeName(type);
+        if (type.endsWith('!')) {
+            return type.substr(0, type.length - 1);
+        } else {
+            return type;
+        }
+    }
+
     function typeName(type) {
         if (typeof type === 'string') {
             return type;
         } else {
             return type.getTypeName();
-        }
-    }
-
-    function plainType(type) {
-        if (type.endsWith('!')) {
-            return type.substr(0, type.length - 1);
-        } else {
-            return type;
         }
     }
 }
