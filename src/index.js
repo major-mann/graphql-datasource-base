@@ -157,10 +157,10 @@ async function createGraphqlInterface({ data, definitions, rootTypes, idFieldSel
             async function list({ args }) {
                 const collection = await loadCollection();
                 const first = args.first > 0 ?
-                    Math.min(args.first, LIMIT) :
+                    args.first :
                     undefined;
                 const last = args.last > 0 ?
-                    Math.min(args.last, LIMIT) :
+                    args.last :
                     undefined;
                 // TODO: Need to pass in selected fields so the query can be done intelligently
                 const data = await collection.list({
