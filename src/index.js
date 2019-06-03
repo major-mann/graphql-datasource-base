@@ -3,7 +3,7 @@ module.exports = createGraphqlInterface;
 const Case = require('case');
 const { SchemaComposer } = require('graphql-compose');
 
-async function createGraphqlInterface({ data, definitions, rootTypes, idFieldSelector, namespace }) {
+async function createGraphqlInterface({ data, definitions, rootTypes, idFieldSelector, namespace, timestamps }) {
     namespace = namespace || '';
     idFieldSelector = idFieldSelector || findFirstNonNullIdField;
 
@@ -64,6 +64,10 @@ async function createGraphqlInterface({ data, definitions, rootTypes, idFieldSel
         createListTypes();
         createQueryType();
         createMutationType();
+
+        if (timestamps) {
+            createTimestampFields();
+        }
 
         function createInputType() {
             const inputTypeName = `${typeName}Input`;
@@ -228,20 +232,43 @@ async function createGraphqlInterface({ data, definitions, rootTypes, idFieldSel
 
             async function create({ args }) {
                 const collection = await loadCollection();
-                const documentId = await collection.create(args[idFieldName], { ...args.data });
+                const data = {
+                    ...args.data
+                };
+                if (timestamps) {
+                    data.created = data.modified = Date.now();
+                }
+                const documentId = await collection.create(args[idFieldName], data);
                 return documentId;
             }
 
             async function upsert({ args }) {
                 const collection = await loadCollection();
-                await collection.upsert(args[idFieldName], { ...args.data });
+                const data = {
+                    ...args.data
+                };
+                if (timestamps) {
+                    const existing = await collection.find(args[idFieldName]);
+                    const now = Date.now();
+                    if (!existing) {
+                        data.created = now;
+                    }
+                    data.modified = now;
+                }
+                await collection.upsert(args[idFieldName], data);
             }
 
             async function update({ args }) {
                 const collection = await loadCollection();
                 const existing = await collection.find(args[idFieldName]);
                 if (existing) {
-                    await collection.update(args[idFieldName], { ...args.data });
+                    const data = {
+                        ...args.data
+                    };
+                    if (timestamps) {
+                        data.modified = Date.now();
+                    }
+                    await collection.update(args[idFieldName], data);
                 } else {
                     throw new Error(`Document with id "${args[idFieldName]}" in collection ` +
                         `"${name}" does not exist for update`);
@@ -262,6 +289,15 @@ async function createGraphqlInterface({ data, definitions, rootTypes, idFieldSel
                 schema: composer
             });
             return collection;
+        }
+    }
+
+    function createTimestampFields(typeComposer) {
+        if (!typeComposer.hasField('created')) {
+            typeComposer.addFields({ created: 'Float!' });
+        }
+        if (!typeComposer.hasField('modified')) {
+            typeComposer.addFields({ modified: 'Float!' });
         }
     }
 
