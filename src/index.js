@@ -1,10 +1,10 @@
 module.exports = createGraphqlInterface;
 
-const Case = require('case');
-const { SchemaComposer } = require('graphql-compose');
+const Case = require(`case`);
+const { SchemaComposer } = require(`graphql-compose`);
 
 async function createGraphqlInterface({ data, definitions, rootTypes, idFieldSelector, namespace, timestamps }) {
-    namespace = namespace || '';
+    namespace = namespace || ``;
     idFieldSelector = idFieldSelector || findFirstNonNullIdField;
 
     const composer = new SchemaComposer();
@@ -38,7 +38,7 @@ async function createGraphqlInterface({ data, definitions, rootTypes, idFieldSel
 
     if (Array.isArray(definitions)) {
         definitions.forEach(definition => composer.addTypeDefs(definition));
-    } else if (typeof definitions === 'string') {
+    } else if (typeof definitions === `string`) {
         composer.addTypeDefs(definitions);
     }
 
@@ -104,7 +104,7 @@ async function createGraphqlInterface({ data, definitions, rootTypes, idFieldSel
                 name: `${typeName}Edge`,
                 fields: {
                     node: `${typeName}!`,
-                    cursor: 'ID!'
+                    cursor: `ID!`
                 }
             });
             composer.createObjectTC({
@@ -119,7 +119,7 @@ async function createGraphqlInterface({ data, definitions, rootTypes, idFieldSel
         function createQueryType() {
             const queryObject =  composer.createObjectTC({ name: `${typeName}Query` })
                 .addResolver({
-                    name: '$find',
+                    name: `$find`,
                     resolve: find,
                     type: typeName,
                     args: {
@@ -127,22 +127,22 @@ async function createGraphqlInterface({ data, definitions, rootTypes, idFieldSel
                     }
                 })
                 .addResolver({
-                    name: '$list',
+                    name: `$list`,
                     resolve: list,
                     type: `${typeName}Connection`,
                     args: {
-                        before: 'ID',
-                        after: 'ID',
-                        first: 'Int',
-                        last: 'Int',
+                        before: `ID`,
+                        after: `ID`,
+                        first: `Int`,
+                        last: `Int`,
                         order: `[DataSourceOrderInput${namespace}!]`,
                         filter: `[DataSourceFilterInput${namespace}!]`
                     }
                 });
 
             queryObject.addFields({
-                find: queryObject.getResolver('$find'),
-                list: queryObject.getResolver('$list')
+                find: queryObject.getResolver(`$find`),
+                list: queryObject.getResolver(`$list`)
             });
 
             composer.Query.addFields({
@@ -182,7 +182,7 @@ async function createGraphqlInterface({ data, definitions, rootTypes, idFieldSel
         function createMutationType() {
             const mutationObject = composer.createObjectTC({ name: `${typeName}Mutation` })
                 .addResolver({
-                    name: '$create',
+                    name: `$create`,
                     type: idFieldType,
                     resolve: create,
                     args: {
@@ -191,8 +191,8 @@ async function createGraphqlInterface({ data, definitions, rootTypes, idFieldSel
                     }
                 })
                 .addResolver({
-                    name: '$update',
-                    type: 'Boolean',
+                    name: `$update`,
+                    type: `Boolean`,
                     resolve: update,
                     args: {
                         [idFieldName]: idFieldType,
@@ -200,8 +200,8 @@ async function createGraphqlInterface({ data, definitions, rootTypes, idFieldSel
                     }
                 })
                 .addResolver({
-                    name: '$upsert',
-                    type: 'Boolean',
+                    name: `$upsert`,
+                    type: `Boolean`,
                     resolve: upsert,
                     args: {
                         [idFieldName]: idFieldType,
@@ -209,18 +209,18 @@ async function createGraphqlInterface({ data, definitions, rootTypes, idFieldSel
                     }
                 })
                 .addResolver({
-                    name: '$delete',
-                    type: 'Boolean',
+                    name: `$delete`,
+                    type: `Boolean`,
                     resolve: remove,
                     args: {
                         [idFieldName]: idFieldType
                     }
                 });
             mutationObject.addFields({
-                create: mutationObject.getResolver('$create'),
-                update: mutationObject.getResolver('$update'),
-                upsert: mutationObject.getResolver('$upsert'),
-                delete: mutationObject.getResolver('$delete')
+                create: mutationObject.getResolver(`$create`),
+                update: mutationObject.getResolver(`$update`),
+                upsert: mutationObject.getResolver(`$upsert`),
+                delete: mutationObject.getResolver(`$delete`)
             });
 
             composer.Mutation.addFields({
@@ -293,22 +293,22 @@ async function createGraphqlInterface({ data, definitions, rootTypes, idFieldSel
     }
 
     function createTimestampFields(typeComposer) {
-        if (!typeComposer.hasField('created')) {
-            typeComposer.addFields({ created: 'Float!' });
+        if (!typeComposer.hasField(`created`)) {
+            typeComposer.addFields({ created: `Float!` });
         }
-        if (!typeComposer.hasField('modified')) {
-            typeComposer.addFields({ modified: 'Float!' });
+        if (!typeComposer.hasField(`modified`)) {
+            typeComposer.addFields({ modified: `Float!` });
         }
     }
 
     function findFirstNonNullIdField(typeComposer) {
         return typeComposer.getFieldNames()
-            .find(fieldName => typeName(typeComposer.getField(fieldName).type) === 'ID!');
+            .find(fieldName => typeName(typeComposer.getField(fieldName).type) === `ID!`);
     }
 
     function plainType(type) {
         type = typeName(type);
-        if (type.endsWith('!')) {
+        if (type.endsWith(`!`)) {
             return type.substr(0, type.length - 1);
         } else {
             return type;
@@ -316,7 +316,7 @@ async function createGraphqlInterface({ data, definitions, rootTypes, idFieldSel
     }
 
     function typeName(type) {
-        if (typeof type === 'string') {
+        if (typeof type === `string`) {
             return type;
         } else {
             return type.getTypeName();
