@@ -271,7 +271,7 @@ async function createGraphqlInterface({ data, definitions, rootTypes, idFieldSel
                     await collection.update(args[idFieldName], data);
                 } else {
                     throw new Error(`Document with id "${args[idFieldName]}" in collection ` +
-                        `"${name}" does not exist for update`);
+                        `"${typeName}" does not exist for update`);
                 }
             }
 
