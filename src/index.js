@@ -230,8 +230,8 @@ async function createGraphqlInterface({ data, definitions, rootTypes, idFieldSel
                 }
             });
 
-            async function create({ args }) {
-                const collection = await loadCollection();
+            async function create({ context, args }) {
+                const collection = await loadCollection(context);
                 const data = {
                     ...args.data
                 };
@@ -242,8 +242,8 @@ async function createGraphqlInterface({ data, definitions, rootTypes, idFieldSel
                 return documentId;
             }
 
-            async function upsert({ args }) {
-                const collection = await loadCollection();
+            async function upsert({ context, args }) {
+                const collection = await loadCollection(context);
                 const data = {
                     ...args.data
                 };
@@ -258,8 +258,8 @@ async function createGraphqlInterface({ data, definitions, rootTypes, idFieldSel
                 await collection.upsert(args[idFieldName], data);
             }
 
-            async function update({ args }) {
-                const collection = await loadCollection();
+            async function update({ context, args }) {
+                const collection = await loadCollection(context);
                 const existing = await collection.find(args[idFieldName]);
                 if (existing) {
                     const data = {
@@ -275,18 +275,19 @@ async function createGraphqlInterface({ data, definitions, rootTypes, idFieldSel
                 }
             }
 
-            async function remove({ args }) {
-                const collection = await loadCollection();
+            async function remove({ context, args }) {
+                const collection = await loadCollection(context);
                 await collection.delete(args[idFieldName]);
             }
         }
 
-        async function loadCollection() {
+        async function loadCollection(context) {
             const collection = await data({
                 id: idFieldName,
                 name: typeName,
                 type: composer.getOTC(typeName),
-                schema: composer
+                schema: composer,
+                context
             });
             return collection;
         }
