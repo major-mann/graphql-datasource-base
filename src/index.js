@@ -1,7 +1,10 @@
 module.exports = createGraphqlInterface;
 
+const SCALARS = [`String`, `Int`, `Float`, `Boolean`, `ID`];
+
 const Case = require(`case`);
-const { SchemaComposer } = require(`graphql-compose`);
+const { GraphQLScalarType, GraphQLNonNull } = require(`graphql`);
+const { SchemaComposer, InputTypeComposer, ScalarTypeComposer, NonNullComposer } = require(`graphql-compose`);
 
 async function createGraphqlInterface({ data, definitions, rootTypes, idFieldSelector, namespace, timestamps }) {
     namespace = namespace || ``;
@@ -59,44 +62,14 @@ async function createGraphqlInterface({ data, definitions, rootTypes, idFieldSel
             .filter(fieldName => fieldName !== idFieldName)
             .map(fieldName => ({ name: fieldName, type: typeComposer.getFieldTC(fieldName) }));
 
-        createInputType();
-        createUpdateInputType();
+        createInputType(typeName, fieldDefinitions);
+        createUpdateInputType(typeName, fieldDefinitions);
         createListTypes();
         createQueryType();
         createMutationType();
 
         if (timestamps) {
             createTimestampFields(typeComposer);
-        }
-
-        function createInputType() {
-            const inputTypeName = `${typeName}Input`;
-            if (composer.has(inputTypeName)) {
-                // The consumer has defined a custom structure
-                return;
-            }
-            composer.createInputTC({
-                name: inputTypeName,
-                fields: fieldDefinitions.reduce(function fieldReduce(result, fieldDefinition) {
-                    result[fieldDefinition.name] = fieldDefinition.type.getTypeName();
-                    return result;
-                }, {})
-            });
-        }
-
-        function createUpdateInputType() {
-            const inputTypeName = `${typeName}UpdateInput`;
-            if (composer.has(inputTypeName)) {
-                // The consumer has defined a custom structure
-                return;
-            }
-            composer.createInputTC({
-                name: inputTypeName,
-                fields: fieldDefinitions.reduce(function fieldReduce(result, fieldDefinition) {
-                    result[fieldDefinition.name] = plainType(fieldDefinition.type.getType());
-                    return result;
-                }, {})
-            });
         }
 
         function createListTypes() {
@@ -293,6 +266,71 @@ async function createGraphqlInterface({ data, definitions, rootTypes, idFieldSel
         }
     }
 
+    function createInputTypeFromType(typeComposer) {
+        return createInputTypeComposerFromType(typeComposer, createInputType);
+    }
+
+    function createUpdateInputTypeFromType(typeComposer) {
+        return createInputTypeComposerFromType(typeComposer, createUpdateInputType);
+    }
+
+    function createInputTypeComposerFromType(typeComposer, create) {
+        const typeName = typeComposer.getTypeName();
+        const idFieldName = idFieldSelector(typeComposer);
+        const fieldDefinitions = typeComposer.getFieldNames()
+            .filter(fieldName => fieldName !== idFieldName)
+            .map(fieldName => ({ name: fieldName, type: typeComposer.getFieldTC(fieldName) }));
+        return create(typeName, fieldDefinitions);
+    }
+
+    function createInputType(typeName, fieldDefinitions) {
+        const inputTypeName = `${typeName}Input`;
+        return createInputTypeComposer(inputTypeName, fieldDefinitions, value => value, createInputTypeFromType);
+    }
+
+    function createUpdateInputType(typeName, fieldDefinitions) {
+        const inputTypeName = `${typeName}UpdateInput`;
+        return createInputTypeComposer(inputTypeName, fieldDefinitions, plainType, createUpdateInputTypeFromType);
+    }
+
+    function createInputTypeComposer(inputTypeName, fieldDefinitions, transformType, recursive) {
+        if (composer.has(inputTypeName)) {
+            // The consumer has defined a custom structure
+            return composer.getITC(inputTypeName);
+        }
+        const typeComposer = composer.createInputTC({
+            name: inputTypeName,
+            fields: fieldDefinitions.reduce(function fieldReduce(result, fieldDefinition) {
+                result[fieldDefinition.name] = transformType(getInputFieldType(fieldDefinition.type, recursive));
+                return result;
+            }, {})
+        });
+        return typeComposer;
+    }
+
+    function getInputFieldType(type, recursive) {
+        if (isScalarType(type)) {
+            return typeName(type);
+        }
+
+        const isNonNullable = type instanceof NonNullComposer ||
+            type instanceof GraphQLNonNull ||
+            plainType(type).endsWith(`!`);
+
+        // Already an input type
+        if (type instanceof InputTypeComposer) {
+            return typeName(type);
+        }
+
+        // This will take care of the case where it already exists
+        const newInputType = recursive(type);
+        if (isNonNullable) {
+            return `${newInputType.getTypeName()}!`;
+        } else {
+            return newInputType.getTypeName();
+        }
+    }
+
     function createTimestampFields(typeComposer) {
         if (!typeComposer.hasField(`created`)) {
             typeComposer.addFields({ created: `Float!` });
@@ -325,6 +363,18 @@ async function createGraphqlInterface({ data, definitions, rootTypes, idFieldSel
             return type.name;
         } else {
             throw new Error(`Unable to determine type name`);
+        }
+    }
+
+    function isScalarType(type) {
+        if (type instanceof GraphQLNonNull) {
+            return isScalarType(type.getNullableType());
+        } else if (type instanceof NonNullComposer) {
+            return isScalarType(type.getUnwrappedTC());
+        } else {
+            return type instanceof GraphQLScalarType ||
+                type instanceof ScalarTypeComposer ||
+                SCALARS.includes(plainType(type));
         }
     }
 }
