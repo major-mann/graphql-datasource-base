@@ -4,7 +4,13 @@ const SCALARS = [`String`, `Int`, `Float`, `Boolean`, `ID`];
 
 const Case = require(`case`);
 const { GraphQLScalarType, GraphQLNonNull } = require(`graphql`);
-const { SchemaComposer, InputTypeComposer, ScalarTypeComposer, NonNullComposer } = require(`graphql-compose`);
+const {
+    SchemaComposer,
+    ObjectTypeComposer,
+    InputTypeComposer,
+    ScalarTypeComposer,
+    NonNullComposer
+} = require(`graphql-compose`);
 
 async function createGraphqlInterface({ data, definitions, rootTypes, idFieldSelector, namespace, timestamps }) {
     namespace = namespace || ``;
@@ -315,14 +321,23 @@ async function createGraphqlInterface({ data, definitions, rootTypes, idFieldSel
 
         const isNonNullable = type instanceof NonNullComposer ||
             type instanceof GraphQLNonNull ||
-            plainType(type).endsWith(`!`);
+            typeName(type).endsWith(`!`);
 
         // Already an input type
         if (type instanceof InputTypeComposer) {
             return typeName(type);
         }
 
-        // This will take care of the case where it already exists
+        if (typeof type === `string`) {
+            type = composer.get(plainType(type));
+        }
+
+        if (type instanceof ObjectTypeComposer === false) {
+            return isNonNullable ?
+                `${typeName(type)}!` :
+                typeName(type);
+        }
+
         const newInputType = recursive(type);
         if (isNonNullable) {
             return `${newInputType.getTypeName()}!`;
