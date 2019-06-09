@@ -78,7 +78,7 @@ async function createGraphqlInterface({ data, definitions, rootTypes, idFieldSel
             composer.createInputTC({
                 name: inputTypeName,
                 fields: fieldDefinitions.reduce(function fieldReduce(result, fieldDefinition) {
-                    result[fieldDefinition.name] = fieldDefinition.type.getType();
+                    result[fieldDefinition.name] = fieldDefinition.type.getTypeName();
                     return result;
                 }, {})
             });
@@ -93,7 +93,7 @@ async function createGraphqlInterface({ data, definitions, rootTypes, idFieldSel
             composer.createInputTC({
                 name: inputTypeName,
                 fields: fieldDefinitions.reduce(function fieldReduce(result, fieldDefinition) {
-                    result[fieldDefinition.name] = fieldDefinition.type.getTypeNonNull();
+                    result[fieldDefinition.name] = plainType(fieldDefinition.type.getType());
                     return result;
                 }, {})
             });
