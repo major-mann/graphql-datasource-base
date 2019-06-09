@@ -66,7 +66,7 @@ async function createGraphqlInterface({ data, definitions, rootTypes, idFieldSel
         createMutationType();
 
         if (timestamps) {
-            createTimestampFields();
+            createTimestampFields(typeComposer);
         }
 
         function createInputType() {
@@ -308,7 +308,7 @@ async function createGraphqlInterface({ data, definitions, rootTypes, idFieldSel
     }
 
     function plainType(type) {
-        type = typeName(type);
+        type = typeName(type).trim();
         if (type.endsWith(`!`)) {
             return type.substr(0, type.length - 1);
         } else {
