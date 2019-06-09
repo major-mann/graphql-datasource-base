@@ -319,8 +319,12 @@ async function createGraphqlInterface({ data, definitions, rootTypes, idFieldSel
     function typeName(type) {
         if (typeof type === `string`) {
             return type;
-        } else {
+        } else if (typeof type.getTypeName === `function`) {
             return type.getTypeName();
+        } else if (type.name) {
+            return type.name;
+        } else {
+            throw new Error(`Unable to determine type name`);
         }
     }
 }
