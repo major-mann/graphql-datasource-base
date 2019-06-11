@@ -316,10 +316,10 @@ async function createGraphqlInterface({ data, definitions, rootTypes, idFieldSel
         }
 
         if (isNonNull(typeComposer)) {
-            return new NonNullComposer(getInputFieldType(typeComposer, recursive));
+            return new NonNullComposer(getInputFieldType(typeComposer.ofType, recursive));
         }
         if (isList(typeComposer)) {
-            return new ListComposer(getInputFieldType(typeComposer, recursive));
+            return new ListComposer(getInputFieldType(typeComposer.ofType, recursive));
         }
 
         // We only want to create the special input type for objects
